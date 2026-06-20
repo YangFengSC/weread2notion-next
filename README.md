@@ -44,6 +44,8 @@ weread2notion-next sync
 weread2notion-next sync --force --books-only
 # Optional, slower:
 weread2notion-next sync --reading-time
+# Optional, sync heatmap data for all historical years:
+weread2notion-next sync --reading-time --all-reading-years
 ```
 
 Use `--limit N` while testing. A full first sync may touch hundreds of bookshelf entries.

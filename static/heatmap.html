@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>微信读书阅读热力图</title>
+  <title>微信读书记录</title>
   <style>
     :root {
       color-scheme: dark light;
@@ -154,7 +154,7 @@
   <div class="wrap">
     <div class="top">
       <div class="heading">
-        <div class="title" id="title">微信读书阅读热力图</div>
+        <div class="title" id="title">微信读书记录</div>
         <select class="year-select" id="yearSelect" aria-label="选择年份"></select>
       </div>
       <div class="meta" id="meta">加载中...</div>
@@ -233,14 +233,12 @@
 
     function availableYears(data) {
       const years = Object.keys(data.years || {}).sort();
-      const current = String(new Date().getFullYear());
-      if (!years.includes(current)) years.push(current);
-      return years.sort();
+      return years;
     }
 
     function render(data, year) {
       const current = data.years?.[year] || { days: {}, total_minutes: 0, active_days: 0 };
-      document.getElementById("title").textContent = `微信读书阅读热力图 ${year}`;
+      document.getElementById("title").textContent = `微信读书记录 ${year}`;
       const total = Number(current.total_minutes || 0);
       const days = daysOfYear(Number(year));
       const longest = longestStreak(days, current.days || {});

@@ -150,6 +150,27 @@ def test_service_lists_daily_read_times_from_readdata_detail():
     assert session.payloads[0]["mode"] == "annually"
 
 
+def test_service_lists_reading_years_from_overall_readdata():
+    session = FakeSession(
+        [
+            {
+                "errcode": 0,
+                "readTimes": {
+                    "1704067200": 3600,
+                    "1735689600": 7200,
+                },
+            }
+        ]
+    )
+
+    years = WeReadService(WeReadGatewayClient("abc1234567890", session=session)).list_reading_years()
+
+    assert 2024 in years
+    assert 2025 in years
+    assert session.payloads[0]["api_name"] == "/readdata/detail"
+    assert session.payloads[0]["mode"] == "overall"
+
+
 def test_normalize_my_rating_to_one_to_five_star_labels():
     assert normalize_my_rating("poor") == "1 星"
     assert normalize_my_rating("fair") == "3 星"

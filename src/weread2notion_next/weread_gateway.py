@@ -330,6 +330,17 @@ class WeReadService:
                 continue
         return sorted(buckets, key=lambda item: item.timestamp)
 
+    def list_reading_years(self) -> list[int]:
+        data = self.client.readdata_detail(mode="overall")
+        years: set[int] = set()
+        for raw in (data.get("readTimes") or {}).keys():
+            try:
+                years.add(datetime.fromtimestamp(int(raw), timezone.utc).year)
+            except (TypeError, ValueError, OSError):
+                continue
+        years.add(datetime.now(timezone.utc).year)
+        return sorted(years)
+
 
 def stable_fallback_id(row: dict[str, Any]) -> str:
     return content_hash(row)[:20]

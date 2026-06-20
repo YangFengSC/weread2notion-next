@@ -76,7 +76,7 @@ body { margin:0; font:14px/1.4 ui-sans-serif, system-ui, -apple-system, BlinkMac
 <body>
 <div class="wrap">
   <div class="top">
-    <div class="title">微信读书阅读热力图 ${escapeHtml(year)}</div>
+    <div class="title">微信读书记录 ${escapeHtml(year)}</div>
     <div class="meta">${current.active_days || 0} 天 · ${totalHours} 时 ${totalMinutes} 分</div>
   </div>
   <div class="grid">${cells.join("")}</div>

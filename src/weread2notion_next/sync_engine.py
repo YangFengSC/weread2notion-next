@@ -56,6 +56,8 @@ class SyncEngine:
         force: bool = False,
         limit: int | None = None,
         reading_time: bool = False,
+        reading_years: list[int] | None = None,
+        all_reading_years: bool = False,
         books_only: bool = False,
     ) -> SyncStats:
         self.workspace.require_template()
@@ -76,14 +78,27 @@ class SyncEngine:
             else:
                 self.sync_book(enriched, stats, dry_run=dry_run)
         if not dry_run and reading_time:
-            self.sync_reading_time(dry_run=dry_run)
+            self.sync_reading_time(
+                dry_run=dry_run,
+                years=reading_years,
+                all_years=all_reading_years,
+            )
         return stats
 
-    def sync_reading_time(self, dry_run: bool = False) -> None:
+    def sync_reading_time(
+        self,
+        dry_run: bool = False,
+        years: list[int] | None = None,
+        all_years: bool = False,
+    ) -> None:
         if not hasattr(self.weread, "list_daily_read_times"):
             return
-        for bucket in self.weread.list_daily_read_times():
-            self.workspace.upsert_daily_read_time(bucket.timestamp, bucket.duration, dry_run=dry_run)
+        if all_years and hasattr(self.weread, "list_reading_years"):
+            years = self.weread.list_reading_years()
+        years = years or [None]
+        for year in years:
+            for bucket in self.weread.list_daily_read_times(year):
+                self.workspace.upsert_daily_read_time(bucket.timestamp, bucket.duration, dry_run=dry_run)
 
     def sync_book(self, book: Book, stats: SyncStats | None = None, dry_run: bool = False) -> SyncStats:
         stats = stats or SyncStats(books_seen=1)

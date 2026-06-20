@@ -55,6 +55,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
         force=args.force,
         limit=args.limit,
         reading_time=args.reading_time,
+        reading_years=parse_years(args.reading_years),
+        all_reading_years=args.all_reading_years,
         books_only=args.books_only,
     )
     prefix = "Dry run complete" if args.dry_run else "Sync complete"
@@ -88,6 +90,8 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument("--force", action="store_true", help="Sync all books even if Sort indicates no changes.")
     sync_parser.add_argument("--limit", type=int, help="Only sync the latest N notebook books.")
     sync_parser.add_argument("--reading-time", action="store_true", help="Also sync daily reading-time statistics.")
+    sync_parser.add_argument("--reading-years", help="Comma-separated years for reading-time sync, for example: 2024,2025,2026.")
+    sync_parser.add_argument("--all-reading-years", action="store_true", help="Sync reading-time statistics for all years reported by WeRead.")
     sync_parser.add_argument("--books-only", action="store_true", help="Only update book metadata; skip chapters, highlights, and notes.")
     sync_parser.set_defaults(func=cmd_sync)
 
@@ -95,6 +99,18 @@ def build_parser() -> argparse.ArgumentParser:
     heatmap_parser.add_argument("--out", default="public/heatmap-data.json", help="Output JSON path.")
     heatmap_parser.set_defaults(func=cmd_export_heatmap)
     return parser
+
+
+def parse_years(value: str | None) -> list[int] | None:
+    if not value:
+        return None
+    years: list[int] = []
+    for part in value.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        years.append(int(part))
+    return years or None
 
 
 def main(argv: list[str] | None = None) -> int:
