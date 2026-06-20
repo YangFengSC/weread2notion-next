@@ -1,0 +1,9 @@
+name = "weread-heatmap"
+main = "weread-heatmap.js"
+compatibility_date = "2026-06-20"
+
+[vars]
+# Replace this after GitHub Pages is enabled.
+HEATMAP_DATA_URL = "https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO/heatmap-data.json"
+# Optional. If set, Notion embed URL must include ?activationCode=...
+# PUBLIC_CODE = "change-me"

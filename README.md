@@ -58,6 +58,46 @@ Add repository secrets:
 
 The included workflow runs daily and can also be started manually.
 
+## Heatmap Worker
+
+This repo includes an optional Cloudflare Worker heatmap endpoint:
+
+```text
+https://YOUR_WORKER.workers.dev/weread/heatmap?year=2026
+```
+
+Workflow:
+
+1. `publish heatmap data` exports Notion `日` database rows to `heatmap-data.json`.
+2. GitHub Pages hosts that JSON.
+3. Cloudflare Worker fetches the JSON and renders an embeddable heatmap page.
+
+Setup:
+
+1. Enable GitHub Pages: repository `Settings` -> `Pages` -> source `GitHub Actions`.
+2. Run the `publish heatmap data` workflow once.
+3. Copy `worker/wrangler.toml.example` to `worker/wrangler.toml`.
+4. Replace `HEATMAP_DATA_URL` with your Pages URL:
+
+```text
+https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO/heatmap-data.json
+```
+
+5. Deploy the Worker:
+
+```bash
+cd worker
+npm install -g wrangler
+wrangler login
+wrangler deploy
+```
+
+Optional: set `PUBLIC_CODE` in `wrangler.toml`, then embed with:
+
+```text
+https://YOUR_WORKER.workers.dev/weread/heatmap?activationCode=YOUR_CODE&year=2026
+```
+
 ## Acceptance Checklist
 
 - First run creates the Notion template automatically.

@@ -6,6 +6,7 @@ import sys
 
 from dotenv import load_dotenv
 
+from .heatmap_export import build_heatmap_payload, write_heatmap_payload
 from .notion_schema import NotionConfigError, NotionWorkspace
 from .state_store import StateStore
 from .sync_engine import SyncEngine
@@ -61,6 +62,17 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_export_heatmap(args: argparse.Namespace) -> int:
+    load_dotenv()
+    workspace = NotionWorkspace.from_env()
+    workspace.require_template()
+    payload = build_heatmap_payload(workspace)
+    path = write_heatmap_payload(payload, args.out)
+    years = ", ".join(payload["years"].keys()) or "none"
+    print(f"Heatmap data exported: {path}; years={years}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="weread2notion-next")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -78,6 +90,10 @@ def build_parser() -> argparse.ArgumentParser:
     sync_parser.add_argument("--reading-time", action="store_true", help="Also sync daily reading-time statistics.")
     sync_parser.add_argument("--books-only", action="store_true", help="Only update book metadata; skip chapters, highlights, and notes.")
     sync_parser.set_defaults(func=cmd_sync)
+
+    heatmap_parser = subparsers.add_parser("export-heatmap", help="Export public heatmap data from the Notion day database.")
+    heatmap_parser.add_argument("--out", default="public/heatmap-data.json", help="Output JSON path.")
+    heatmap_parser.set_defaults(func=cmd_export_heatmap)
     return parser
 
 

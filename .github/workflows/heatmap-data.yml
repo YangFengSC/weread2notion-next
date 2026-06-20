@@ -1,0 +1,51 @@
+name: publish heatmap data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 0 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: heatmap-data
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install weread2notion-next
+        run: |
+          python -m pip install --upgrade pip
+          pip install .
+      - name: Sync daily reading time
+        env:
+          WEREAD_API_KEY: ${{ secrets.WEREAD_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE: ${{ secrets.NOTION_PAGE }}
+        run: weread2notion-next sync --reading-time
+      - name: Export heatmap data
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_PAGE: ${{ secrets.NOTION_PAGE }}
+        run: weread2notion-next export-heatmap --out public/heatmap-data.json
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
