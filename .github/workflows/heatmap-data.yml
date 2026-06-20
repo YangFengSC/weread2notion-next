@@ -42,6 +42,8 @@ jobs:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_PAGE: ${{ secrets.NOTION_PAGE }}
         run: weread2notion-next export-heatmap --out public/heatmap-data.json
+      - name: Copy static heatmap page
+        run: cp static/heatmap.html public/heatmap.html
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

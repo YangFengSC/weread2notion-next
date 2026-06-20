@@ -60,19 +60,35 @@ The included workflow runs daily and can also be started manually.
 
 ## Heatmap Worker
 
-This repo includes an optional Cloudflare Worker heatmap endpoint:
+The simplest heatmap deployment uses GitHub Pages only:
 
 ```text
-https://YOUR_WORKER.workers.dev/weread/heatmap?year=2026
+https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO/heatmap.html?year=2026
 ```
 
 Workflow:
 
 1. `publish heatmap data` exports Notion `日` database rows to `heatmap-data.json`.
-2. GitHub Pages hosts that JSON.
-3. Cloudflare Worker fetches the JSON and renders an embeddable heatmap page.
+2. GitHub Pages hosts `heatmap-data.json` and `heatmap.html`.
+3. Notion embeds the GitHub Pages `heatmap.html` URL.
 
 Setup:
+
+1. Enable GitHub Pages: repository `Settings` -> `Pages` -> source `GitHub Actions`.
+2. Run the `publish heatmap data` workflow once.
+3. Embed this URL in Notion:
+
+```text
+https://YOUR_GITHUB_USERNAME.github.io/YOUR_REPO/heatmap.html?year=2026
+```
+
+Cloudflare Worker is optional if you prefer an API-like endpoint:
+
+```text
+https://YOUR_WORKER.workers.dev/weread/heatmap?year=2026
+```
+
+Worker setup:
 
 1. Enable GitHub Pages: repository `Settings` -> `Pages` -> source `GitHub Actions`.
 2. Run the `publish heatmap data` workflow once.
