@@ -1,0 +1,70 @@
+name: weread sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Sync mode
+        required: true
+        default: daily
+        type: choice
+        options:
+          - daily
+          - full
+          - books-only
+          - reading-time
+          - custom
+      sync_args:
+        description: Custom sync args, only used when mode is custom
+        required: false
+        default: ""
+  schedule:
+    - cron: "0 0 * * *"
+
+concurrency:
+  group: weread-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Resolve sync args
+        id: args
+        shell: bash
+        env:
+          MODE: ${{ github.event.inputs.mode || 'daily' }}
+          CUSTOM_ARGS: ${{ github.event.inputs.sync_args || '' }}
+        run: |
+          case "$MODE" in
+            daily)
+              echo "sync_args=" >> "$GITHUB_OUTPUT"
+              ;;
+            full)
+              echo "sync_args=--force --reading-time" >> "$GITHUB_OUTPUT"
+              ;;
+            books-only)
+              echo "sync_args=--force --books-only" >> "$GITHUB_OUTPUT"
+              ;;
+            reading-time)
+              echo "sync_args=--reading-time" >> "$GITHUB_OUTPUT"
+              ;;
+            custom)
+              echo "sync_args=$CUSTOM_ARGS" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unknown mode: $MODE" >&2
+              exit 1
+              ;;
+          esac
+      - name: WeRead to Notion
+        uses: ./
+        with:
+          weread-api-key: ${{ secrets.WEREAD_API_KEY }}
+          notion-token: ${{ secrets.NOTION_TOKEN }}
+          notion-page: ${{ secrets.NOTION_PAGE }}
+          sync-args: ${{ steps.args.outputs.sync_args }}
