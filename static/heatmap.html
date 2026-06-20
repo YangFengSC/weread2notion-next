@@ -27,7 +27,7 @@
     .wrap {
       box-sizing: border-box;
       width: 100%;
-      min-height: 190px;
+      min-height: 214px;
       padding: 18px;
       border: 1px solid rgba(148, 163, 184, .22);
       border-radius: 10px;
@@ -42,6 +42,13 @@
       margin-bottom: 16px;
     }
 
+    .heading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
     .title {
       font-size: 18px;
       font-weight: 700;
@@ -52,14 +59,65 @@
       white-space: nowrap;
     }
 
+    .year-select {
+      height: 30px;
+      padding: 0 28px 0 10px;
+      border: 1px solid rgba(148, 163, 184, .28);
+      border-radius: 7px;
+      color: var(--text);
+      background: #1f2937;
+      font: inherit;
+    }
+
+    .chart {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      column-gap: 8px;
+      align-items: start;
+    }
+
+    .weekdays {
+      display: grid;
+      grid-template-rows: repeat(7, 12px);
+      gap: 4px;
+      margin-top: 22px;
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .weekdays span {
+      height: 12px;
+      line-height: 12px;
+    }
+
+    .scroller {
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .months {
+      position: relative;
+      height: 18px;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .month {
+      position: absolute;
+      top: 0;
+      height: 18px;
+      line-height: 18px;
+      white-space: nowrap;
+    }
+
     .grid {
       display: grid;
       grid-auto-flow: column;
       grid-template-rows: repeat(7, 12px);
       grid-auto-columns: 12px;
       gap: 4px;
-      overflow-x: auto;
-      padding-bottom: 4px;
     }
 
     .cell {
@@ -95,10 +153,27 @@
 <body>
   <div class="wrap">
     <div class="top">
-      <div class="title" id="title">微信读书阅读热力图</div>
+      <div class="heading">
+        <div class="title" id="title">微信读书阅读热力图</div>
+        <select class="year-select" id="yearSelect" aria-label="选择年份"></select>
+      </div>
       <div class="meta" id="meta">加载中...</div>
     </div>
-    <div class="grid" id="grid"></div>
+    <div class="chart">
+      <div class="weekdays">
+        <span>周一</span>
+        <span></span>
+        <span>周三</span>
+        <span></span>
+        <span>周五</span>
+        <span></span>
+        <span></span>
+      </div>
+      <div class="scroller">
+        <div class="months" id="months"></div>
+        <div class="grid" id="grid"></div>
+      </div>
+    </div>
     <div class="legend">
       <span>少</span>
       <span class="cell level-0"></span>
@@ -112,34 +187,89 @@
 
   <script>
     const params = new URLSearchParams(location.search);
-    const year = params.get("year") || String(new Date().getFullYear());
+    let selectedYear = params.get("year") || String(new Date().getFullYear());
+    let heatmapData = null;
 
     fetch("heatmap-data.json", { cache: "no-store" })
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
       })
-      .then((data) => render(data, year))
+      .then((data) => {
+        heatmapData = data;
+        selectedYear = normalizeYear(data, selectedYear);
+        setupYearSelect(data, selectedYear);
+        render(data, selectedYear);
+      })
       .catch((error) => {
         document.getElementById("meta").textContent = `加载失败：${error.message}`;
       });
+
+    document.getElementById("yearSelect").addEventListener("change", (event) => {
+      selectedYear = event.target.value;
+      const next = new URL(location.href);
+      next.searchParams.set("year", selectedYear);
+      history.replaceState(null, "", next);
+      if (heatmapData) render(heatmapData, selectedYear);
+    });
+
+    function setupYearSelect(data, year) {
+      const select = document.getElementById("yearSelect");
+      select.textContent = "";
+      for (const item of availableYears(data)) {
+        const option = document.createElement("option");
+        option.value = item;
+        option.textContent = item;
+        option.selected = item === year;
+        select.appendChild(option);
+      }
+    }
+
+    function normalizeYear(data, year) {
+      const years = availableYears(data);
+      if (years.includes(year)) return year;
+      return years[years.length - 1] || year;
+    }
+
+    function availableYears(data) {
+      const years = Object.keys(data.years || {}).sort();
+      const current = String(new Date().getFullYear());
+      if (!years.includes(current)) years.push(current);
+      return years.sort();
+    }
 
     function render(data, year) {
       const current = data.years?.[year] || { days: {}, total_minutes: 0, active_days: 0 };
       document.getElementById("title").textContent = `微信读书阅读热力图 ${year}`;
       const total = Number(current.total_minutes || 0);
-      document.getElementById("meta").textContent = `${current.active_days || 0} 天 · ${Math.floor(total / 60)} 时 ${Math.round(total % 60)} 分`;
+      const days = daysOfYear(Number(year));
+      const longest = longestStreak(days, current.days || {});
+      document.getElementById("meta").textContent = `${Math.floor(total / 60)} 时 ${Math.round(total % 60)} 分 · 阅读 ${current.active_days || 0} 天 · 最长连续 ${longest} 天`;
 
       const grid = document.getElementById("grid");
+      const months = document.getElementById("months");
       grid.textContent = "";
+      months.textContent = "";
       const firstDay = new Date(`${year}-01-01T00:00:00Z`).getUTCDay();
       const leading = (firstDay + 6) % 7;
+      const totalCells = leading + days.length;
+      const weekCount = Math.ceil(totalCells / 7);
+      const chartWidth = weekCount * 16 - 4;
+      grid.style.width = `${chartWidth}px`;
+      months.style.width = `${chartWidth}px`;
       for (let i = 0; i < leading; i += 1) {
         grid.appendChild(cell(0, "", true));
       }
-      for (const day of daysOfYear(Number(year))) {
+      for (const day of days) {
         const minutes = Number(current.days?.[day] || 0);
         grid.appendChild(cell(level(minutes), `${day}: ${minutes} 分钟`));
+      }
+      for (const label of monthLabels(Number(year), leading)) {
+        const el = document.createElement("span");
+        el.className = "month";
+        el.style.left = `${label.week * 16}px`;
+        el.textContent = label.text;
+        months.appendChild(el);
       }
     }
 
@@ -158,6 +288,34 @@
         date.setUTCDate(date.getUTCDate() + 1);
       }
       return result;
+    }
+
+    function monthLabels(year, leading) {
+      const labels = [];
+      for (let month = 0; month < 12; month += 1) {
+        const date = new Date(Date.UTC(year, month, 1));
+        const start = new Date(Date.UTC(year, 0, 1));
+        const dayIndex = Math.floor((date - start) / 86400000);
+        labels.push({
+          text: `${month + 1}月`,
+          week: Math.floor((leading + dayIndex) / 7),
+        });
+      }
+      return labels;
+    }
+
+    function longestStreak(days, values) {
+      let current = 0;
+      let longest = 0;
+      for (const day of days) {
+        if (Number(values[day] || 0) > 0) {
+          current += 1;
+          longest = Math.max(longest, current);
+        } else {
+          current = 0;
+        }
+      }
+      return longest;
     }
 
     function level(minutes) {
