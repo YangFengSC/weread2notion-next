@@ -61,10 +61,26 @@ TAG_ICON = "https://www.notion.so/icons/tag_gray.svg"
 USER_ICON = "https://www.notion.so/icons/user-circle-filled_gray.svg"
 SYNC_ICON = "https://www.notion.so/icons/refresh_gray.svg"
 TARGET_ICON_URL = "https://www.notion.so/icons/target_gray.svg"
+TRANSIENT_NOTION_ERROR_CODES = {
+    "bad_gateway",
+    "gateway_timeout",
+    "internal_server_error",
+    "rate_limited",
+    "request_timeout",
+    "service_unavailable",
+}
+TRANSIENT_NOTION_STATUS_CODES = {408, 429, 500, 502, 503, 504}
 
 
 def should_retry_notion_exception(exc: Exception) -> bool:
-    return not isinstance(exc, APIResponseError)
+    if not isinstance(exc, APIResponseError):
+        return True
+
+    code = getattr(exc, "code", None)
+    if hasattr(code, "value"):
+        code = code.value
+    status = getattr(exc, "status", None) or getattr(exc, "status_code", None)
+    return code in TRANSIENT_NOTION_ERROR_CODES or status in TRANSIENT_NOTION_STATUS_CODES
 
 
 NOTION_RETRY = {

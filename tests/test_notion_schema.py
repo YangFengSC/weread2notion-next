@@ -2,8 +2,19 @@ import pytest
 from httpx import Headers
 from notion_client.errors import APIResponseError
 
-from weread2notion_next.notion_schema import AUTHOR_DB, DAY_DB, NotionConfigError, NotionWorkspace
+from weread2notion_next.notion_schema import AUTHOR_DB, DAY_DB, NotionConfigError, NotionWorkspace, should_retry_notion_exception
 
+
+def test_transient_notion_api_errors_are_retried():
+    exc = APIResponseError("service_unavailable", 503, "down", Headers(), "")
+
+    assert should_retry_notion_exception(exc) is True
+
+
+def test_validation_notion_api_errors_are_not_retried():
+    exc = APIResponseError("validation_error", 400, "bad", Headers(), "")
+
+    assert should_retry_notion_exception(exc) is False
 
 class FakeClient:
     def __init__(self, properties):

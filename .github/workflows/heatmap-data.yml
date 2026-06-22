@@ -36,12 +36,28 @@ jobs:
           WEREAD_API_KEY: ${{ secrets.WEREAD_API_KEY }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_PAGE: ${{ secrets.NOTION_PAGE }}
-        run: weread2notion-next sync --reading-time --all-reading-years
+        run: |
+          for attempt in 1 2 3; do
+            weread2notion-next sync --reading-time --all-reading-years && exit 0
+            status=$?
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            sleep $((attempt * 60))
+          done
       - name: Export heatmap data
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_PAGE: ${{ secrets.NOTION_PAGE }}
-        run: weread2notion-next export-heatmap --out public/heatmap-data.json
+        run: |
+          for attempt in 1 2 3; do
+            weread2notion-next export-heatmap --out public/heatmap-data.json && exit 0
+            status=$?
+            if [ "$attempt" -eq 3 ]; then
+              exit "$status"
+            fi
+            sleep $((attempt * 60))
+          done
       - name: Copy static heatmap page
         run: cp static/heatmap.html public/heatmap.html
       - name: Upload Pages artifact

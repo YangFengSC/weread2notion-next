@@ -46,11 +46,27 @@ runs:
         WEREAD_API_KEY: ${{ inputs.weread-api-key }}
         NOTION_TOKEN: ${{ inputs.notion-token }}
         NOTION_PAGE: ${{ inputs.notion-page }}
-      run: weread2notion-next init
+      run: |
+        for attempt in 1 2 3; do
+          weread2notion-next init && exit 0
+          status=$?
+          if [ "$attempt" -eq 3 ]; then
+            exit "$status"
+          fi
+          sleep $((attempt * 60))
+        done
     - name: Sync WeRead to Notion
       shell: bash
       env:
         WEREAD_API_KEY: ${{ inputs.weread-api-key }}
         NOTION_TOKEN: ${{ inputs.notion-token }}
         NOTION_PAGE: ${{ inputs.notion-page }}
-      run: weread2notion-next sync ${{ inputs.sync-args }}
+      run: |
+        for attempt in 1 2 3; do
+          weread2notion-next sync ${{ inputs.sync-args }} && exit 0
+          status=$?
+          if [ "$attempt" -eq 3 ]; then
+            exit "$status"
+          fi
+          sleep $((attempt * 60))
+        done
