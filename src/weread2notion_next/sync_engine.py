@@ -99,6 +99,7 @@ class SyncEngine:
         for year in years:
             for bucket in self.weread.list_daily_read_times(year):
                 self.workspace.upsert_daily_read_time(bucket.timestamp, bucket.duration, dry_run=dry_run)
+        self.workspace.refresh_reading_time_rollups(dry_run=dry_run)
 
     def sync_book(self, book: Book, stats: SyncStats | None = None, dry_run: bool = False) -> SyncStats:
         stats = stats or SyncStats(books_seen=1)

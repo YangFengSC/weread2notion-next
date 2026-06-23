@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .notion_schema import DAY_DB, NotionWorkspace, property_value
+from .notion_schema import DAY_DB, NotionWorkspace, property_value, read_minutes_from_properties
 
 
 def build_heatmap_payload(workspace: NotionWorkspace) -> dict[str, Any]:
@@ -18,7 +18,7 @@ def heatmap_payload_from_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     for row in rows:
         properties = row.get("properties") or {}
         date_value = property_value(properties.get("日期"))
-        minutes = property_value(properties.get("时长")) or 0
+        minutes = read_minutes_from_properties(properties)
         if not date_value:
             timestamp = property_value(properties.get("时间戳"))
             if timestamp:

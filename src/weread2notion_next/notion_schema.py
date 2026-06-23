@@ -163,6 +163,7 @@ class NotionWorkspace:
         self._database_parent_page_id: str | None = None
         self._period_page_cache: dict[tuple[str, str], str] = {}
         self._daily_read_page_cache: dict[int, dict[str, Any]] | None = None
+        self._read_record_page_cache: dict[int, dict[str, Any]] | None = None
 
     @classmethod
     def from_env(cls) -> "NotionWorkspace":
@@ -542,7 +543,7 @@ class NotionWorkspace:
             status = property_value((row.get("properties") or {}).get("阅读状态")) or ""
             status_counts[status] = status_counts.get(status, 0) + 1
         days = self.query_all(self.db(DAY_DB))
-        read_seconds = sum(property_value((row.get("properties") or {}).get("时长")) or 0 for row in days)
+        read_minutes = sum(read_minutes_from_properties(row.get("properties") or {}) for row in days)
         return {
             "books": len(books),
             "reading": status_counts.get("在读", 0),
@@ -551,8 +552,8 @@ class NotionWorkspace:
             "bookmarks": len(self.query_all(self.db(BOOKMARK_DB))),
             "reviews": len(self.query_all(self.db(REVIEW_DB))),
             "chapters": len(self.query_all(self.db(CHAPTER_DB))),
-            "read_days": len([row for row in days if (property_value((row.get("properties") or {}).get("时长")) or 0) >= 60]),
-            "read_seconds": int(read_seconds),
+            "read_days": len([row for row in days if read_minutes_from_properties(row.get("properties") or {}) > 0]),
+            "read_seconds": int(read_minutes * 60),
             "authors": len(self.query_all(self.db(AUTHOR_DB))),
             "categories": len(self.query_all(self.db(CATEGORY_DB))),
         }
@@ -564,8 +565,9 @@ class NotionWorkspace:
         day_title = dt.strftime("%Y年%m月%d日")
         minutes = round((duration or 0) / 60, 2)
         existing = self.daily_read_pages_by_timestamp().get(timestamp)
+        self.upsert_read_record(timestamp, duration, dry_run=dry_run)
         if existing:
-            existing_minutes = property_value((existing.get("properties") or {}).get("时长"))
+            existing_minutes = read_minutes_from_properties(existing.get("properties") or {})
             if existing_minutes == minutes:
                 return
         year_id = self.get_or_create_period_page(YEAR_DB, dt.strftime("%Y"), period_start(dt, "year"), period_end(dt, "year"))
@@ -593,6 +595,74 @@ class NotionWorkspace:
         created = self.create_page(parent=self.data_source_parent(DAY_DB), properties=properties)
         self._daily_read_page_cache[timestamp] = {**created, "properties": properties}
 
+    def upsert_read_record(self, timestamp: int, duration: int, dry_run: bool = False) -> None:
+        if dry_run:
+            return
+        dt = datetime.fromtimestamp(timestamp, timezone.utc) + timedelta(hours=8)
+        minutes = round((duration or 0) / 60, 2)
+        title = dt.strftime("%Y年%m月%d日")
+        properties = {
+            "标题": title_prop(title),
+            "日期": date_prop(dt.strftime("%Y-%m-%d")),
+            "时间戳": number_prop(timestamp),
+            "时长": number_prop(minutes),
+        }
+        existing = self.read_record_pages_by_timestamp().get(timestamp)
+        if existing:
+            existing_minutes = read_minutes_from_properties(existing.get("properties") or {})
+            if existing_minutes == minutes:
+                return
+            self.update_page(page_id=existing["id"], properties=properties)
+            self._read_record_page_cache[timestamp] = {**existing, "properties": properties}
+            return
+        created = self.create_page(parent=self.data_source_parent(READ_RECORD_DB), properties=properties)
+        self._read_record_page_cache[timestamp] = {**created, "properties": properties}
+
+    def read_record_pages_by_timestamp(self) -> dict[int, dict[str, Any]]:
+        if self._read_record_page_cache is None:
+            self._read_record_page_cache = {}
+            for row in self.query_all(self.db(READ_RECORD_DB)):
+                timestamp = property_value((row.get("properties") or {}).get("时间戳"))
+                if timestamp is not None:
+                    self._read_record_page_cache[int(timestamp)] = row
+        return self._read_record_page_cache
+
+    def refresh_reading_time_rollups(self, dry_run: bool = False) -> None:
+        if dry_run:
+            return
+        buckets: dict[tuple[str, str], dict[str, Any]] = {}
+        for row in self.query_all(self.db(DAY_DB)):
+            properties = row.get("properties") or {}
+            day = property_value(properties.get("日期"))
+            if not day:
+                timestamp = property_value(properties.get("时间戳"))
+                if timestamp:
+                    day = (datetime.fromtimestamp(int(timestamp), timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
+            if not day:
+                continue
+            dt = datetime.strptime(str(day)[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            minutes = read_minutes_from_properties(properties)
+            week_year, week_number, _ = dt.isocalendar()
+            specs = [
+                (YEAR_DB, dt.strftime("%Y"), period_start(dt, "year"), period_end(dt, "year")),
+                (MONTH_DB, dt.strftime("%Y年%m月"), period_start(dt, "month"), period_end(dt, "month")),
+                (WEEK_DB, f"{week_year}年第{week_number}周", period_start(dt, "week"), period_end(dt, "week")),
+            ]
+            for database_name, title, start, end in specs:
+                bucket = buckets.setdefault(
+                    (database_name, title),
+                    {"database_name": database_name, "title": title, "start": start, "end": end, "minutes": 0.0},
+                )
+                bucket["minutes"] += minutes
+        for bucket in buckets.values():
+            self.get_or_create_period_page(
+                bucket["database_name"],
+                bucket["title"],
+                bucket["start"],
+                bucket["end"],
+                duration_minutes=round(bucket["minutes"], 2),
+            )
+
     def daily_read_pages_by_timestamp(self) -> dict[int, dict[str, Any]]:
         if self._daily_read_page_cache is None:
             self._daily_read_page_cache = {}
@@ -602,15 +672,28 @@ class NotionWorkspace:
                     self._daily_read_page_cache[int(timestamp)] = row
         return self._daily_read_page_cache
 
-    def get_or_create_period_page(self, database_name: str, title: str, start: datetime, end: datetime) -> str:
+    def get_or_create_period_page(
+        self,
+        database_name: str,
+        title: str,
+        start: datetime,
+        end: datetime,
+        duration_minutes: int | float | None = None,
+    ) -> str:
         cache_key = (database_name, title)
-        if cache_key in self._period_page_cache:
+        if cache_key in self._period_page_cache and duration_minutes is None:
             return self._period_page_cache[cache_key]
-        results = self.query_all(self.db(database_name), filter={"property": "标题", "title": {"equals": title}})
         properties = {
             "标题": title_prop(title),
             "日期": {"date": {"start": start.strftime("%Y-%m-%d"), "end": end.strftime("%Y-%m-%d")}},
         }
+        if duration_minutes is not None:
+            properties["时长"] = number_prop(duration_minutes)
+        if cache_key in self._period_page_cache:
+            page_id = self._period_page_cache[cache_key]
+            self.update_page(page_id=page_id, properties=properties)
+            return page_id
+        results = self.query_all(self.db(database_name), filter={"property": "标题", "title": {"equals": title}})
         if results:
             self.update_page(page_id=results[0]["id"], properties=properties)
             self._period_page_cache[cache_key] = results[0]["id"]
@@ -1589,6 +1672,17 @@ def property_value(prop: dict[str, Any] | None) -> Any:
     if prop_type == "date":
         return value.get("start") if value else None
     return value
+
+
+def read_minutes_from_properties(properties: dict[str, Any]) -> float:
+    for name in ("时长", "分钟"):
+        value = property_value(properties.get(name))
+        if value is not None:
+            return round(float(value or 0), 2)
+    hours = property_value(properties.get("小时"))
+    if hours is not None:
+        return round(float(hours or 0) * 60, 2)
+    return 0.0
 
 
 def block_plain_text(block: dict[str, Any]) -> str:
