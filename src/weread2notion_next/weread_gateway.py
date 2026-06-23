@@ -321,14 +321,18 @@ class WeReadService:
         year = year or datetime.now(timezone.utc).year
         base_time = int(datetime(year, 1, 1, tzinfo=timezone.utc).timestamp())
         data = self.client.readdata_detail(mode="annually", base_time=base_time)
-        raw = data.get("dailyReadTimes") or data.get("readTimes") or {}
-        buckets: list[ReadTimeBucket] = []
-        for timestamp, duration in raw.items():
-            try:
-                buckets.append(ReadTimeBucket(timestamp=int(timestamp), duration=int(duration or 0)))
-            except (TypeError, ValueError):
-                continue
-        return sorted(buckets, key=lambda item: item.timestamp)
+        raw = data.get("dailyReadTimes") or {}
+        if raw:
+            return parse_read_time_buckets(raw, year=year)
+
+        buckets: dict[int, ReadTimeBucket] = {}
+        for month in reading_months_for_year(year):
+            month_base_time = int(datetime(year, month, 1, tzinfo=timezone.utc).timestamp())
+            month_data = self.client.readdata_detail(mode="monthly", base_time=month_base_time)
+            month_raw = month_data.get("dailyReadTimes") or month_data.get("readTimes") or {}
+            for bucket in parse_read_time_buckets(month_raw, year=year):
+                buckets[bucket.timestamp] = bucket
+        return sorted(buckets.values(), key=lambda item: item.timestamp)
 
     def list_reading_years(self) -> list[int]:
         data = self.client.readdata_detail(mode="overall")
@@ -340,6 +344,27 @@ class WeReadService:
                 continue
         years.add(datetime.now(timezone.utc).year)
         return sorted(years)
+
+
+def parse_read_time_buckets(raw: dict[str, Any], year: int | None = None) -> list[ReadTimeBucket]:
+    buckets: list[ReadTimeBucket] = []
+    for timestamp, duration in raw.items():
+        try:
+            parsed_timestamp = int(timestamp)
+            if year is not None and datetime.fromtimestamp(parsed_timestamp, timezone.utc).year != year:
+                continue
+            buckets.append(ReadTimeBucket(timestamp=parsed_timestamp, duration=int(duration or 0)))
+        except (TypeError, ValueError):
+            continue
+    return sorted(buckets, key=lambda item: item.timestamp)
+
+
+def reading_months_for_year(year: int) -> list[int]:
+    now = datetime.now(timezone.utc)
+    if year > now.year:
+        return []
+    end_month = now.month if year == now.year else 12
+    return list(range(1, end_month + 1))
 
 
 def stable_fallback_id(row: dict[str, Any]) -> str:

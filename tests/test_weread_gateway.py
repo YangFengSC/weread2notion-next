@@ -150,6 +150,45 @@ def test_service_lists_daily_read_times_from_readdata_detail():
     assert session.payloads[0]["mode"] == "annually"
 
 
+def test_service_falls_back_to_monthly_read_times_for_daily_buckets(monkeypatch):
+    monkeypatch.setattr("weread2notion_next.weread_gateway.reading_months_for_year", lambda year: [1, 2])
+    session = FakeSession(
+        [
+            {
+                "errcode": 0,
+                "readTimes": {
+                    "1767225600": 3600,
+                    "1769904000": 7200,
+                },
+            },
+            {
+                "errcode": 0,
+                "readTimes": {
+                    "1767225600": 120,
+                    "1767312000": 60,
+                },
+            },
+            {
+                "errcode": 0,
+                "readTimes": {
+                    "1769904000": 180,
+                    "1769990400": 240,
+                },
+            },
+        ]
+    )
+
+    buckets = WeReadService(WeReadGatewayClient("abc1234567890", session=session)).list_daily_read_times(2026)
+
+    assert [(bucket.timestamp, bucket.duration) for bucket in buckets] == [
+        (1767225600, 120),
+        (1767312000, 60),
+        (1769904000, 180),
+        (1769990400, 240),
+    ]
+    assert [payload["mode"] for payload in session.payloads] == ["annually", "monthly", "monthly"]
+
+
 def test_service_lists_reading_years_from_overall_readdata():
     session = FakeSession(
         [
